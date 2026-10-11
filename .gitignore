@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.py[cod]
+security_events.jsonl
+defense_enabled.json
+.env

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LORD Command Injection Lab</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body>
+<header class="topbar">
+ <a class="brand" href="#"><span class="brand-mark">L</span><span>LORD<span class="dot">.</span></span></a>
+ <nav><a class="active" href="#checker">Network Check</a><a href="#about">About</a></nav>
+ <div id="modePill" class="mode-pill off"><i></i><span>Defense monitor OFF</span></div>
+</header>
+<main>
+ <section class="welcome"><div><p class="eyebrow">LORD SECURITY LAB / TRAINING ENVIRONMENT</p><h1>Check your connection.</h1><p class="subtitle">A simple network diagnostic utility for hostname checks and secure input handling.</p></div>
+ <div class="hero-art" aria-hidden="true"><div class="orbit o1"></div><div class="orbit o2"></div><div class="globe">◎</div><span class="node n1"></span><span class="node n2"></span><span class="node n3"></span></div></section>
+ <section class="layout" id="checker">
+  <div class="card checker"><div class="section-title"><div><p class="eyebrow">NETWORK DIAGNOSTICS</p><h2>Connection checker</h2></div><span class="pill">Local lab</span></div>
+   <p class="muted">Enter a hostname to test the website's input handling. Start the defense monitor in Terminal 2 to enable protection.</p>
+   <form id="checkForm"><label for="host">Hostname</label><div class="input-row"><span class="prefix">host://</span><input id="host" name="host" value="localhost" maxlength="300" placeholder="example.com" autocomplete="off" required><button id="checkBtn" type="submit">Check connection <span>→</span></button></div>
+    <div class="examples"><span>Quick test:</span><button type="button" class="example" data-value="localhost">Normal input</button><button type="button" class="example" data-value="127.0.0.1; echo INJECTION_TEST">Injection demo</button></div>
+   </form>
+   <div id="result" class="result neutral"><span class="result-icon">i</span><div><strong>Ready to check</strong><p>Enter a hostname and select Check connection.</p></div></div>
+   <div class="lab-warning"><b>Training mode:</b> before defense starts, the injection example displays fictional mock records to illustrate the impact. No command executes and no real database is accessed.</div>
+  </div>
+  <aside class="card side"><div class="mini-icon">⌁</div><p class="eyebrow">LORD DEFENSE</p><h3>Monitor input. Block threats.</h3><p class="muted">Run the separate defense monitor to turn on server-side validation and live event reporting.</p>
+   <div class="feature"><span>✓</span><div><b>Input validation</b><p>Reject malformed hostname input.</p></div></div>
+   <div class="feature"><span>✓</span><div><b>Safe processing</b><p>No shell commands are executed.</p></div></div>
+   <div class="feature"><span>✓</span><div><b>Live event monitor</b><p>See requests and decisions in Terminal 2.</p></div></div>
+   <div class="state-card"><span class="state-dot"></span><div><b id="stateTitle">Defense monitor OFF</b><p id="stateDesc">Simulation mode is active.</p></div></div>
+  </aside>
+ </section>
+ <section class="note" id="about"><span class="note-icon">i</span><div><b>About this training lab</b><p>The pre-defense response is a controlled simulation with fictional data. When the monitor is active, malformed input is rejected and logged. This project does not run shell commands or connect to a real database.</p></div></section>
+ <footer><b>LORD<span class="dot">.</span> Security Lab</b><span>Local training only · 127.0.0.1</span><span id="serviceStatus">Connecting…</span></footer>
+</main>
+<script>
+const input=document.getElementById('host'), form=document.getElementById('checkForm'), result=document.getElementById('result'), btn=document.getElementById('checkBtn');
+document.querySelectorAll('.example').forEach(b=>b.addEventListener('click',()=>{input.value=b.dataset.value;input.focus()}));
+function showResult(data, httpStatus){
+ const blocked=data.status==='BLOCKED', simulated=data.status==='SIMULATED_SUCCESS', allowed=data.status==='ALLOWED'||data.status==='NORMAL';
+ result.className='result '+(blocked?'blocked':simulated?'simulated':allowed?'allowed':'neutral');
+ result.replaceChildren();
+ const icon=document.createElement('span');icon.className='result-icon';icon.textContent=blocked?'×':simulated?'!':allowed?'✓':'i';
+ const body=document.createElement('div');const title=document.createElement('strong');
+ title.textContent=blocked?'LORD defense: request blocked':simulated?'Simulated vulnerable response':allowed?'Request accepted':(data.status||'Response');
+ const p=document.createElement('p');p.textContent=data.error||data.message||data.result||data.reason||'';
+ body.append(title,p);
+ if(data.database_label){
+   const db=document.createElement('div');db.className='mockdb';
+   const heading=document.createElement('b');heading.textContent=data.database_label;db.append(heading);
+   const table=document.createElement('table');
+   const trh=document.createElement('tr');['ID','Username','Role','Note'].forEach(t=>{const th=document.createElement('th');th.textContent=t;trh.append(th)});table.append(trh);
+   (data.records||[]).forEach(row=>{const tr=document.createElement('tr');[row.id,row.username,row.role,row.note].forEach(v=>{const td=document.createElement('td');td.textContent=String(v);tr.append(td)});table.append(tr)});
+   db.append(table);body.append(db);
+ }
+ if(data.warning){const warn=document.createElement('small');warn.className='warning';warn.textContent=data.warning;body.append(warn)}
+ if(data.addresses?.length){const small=document.createElement('small');small.textContent='Addresses: '+data.addresses.join(', ');body.append(small)}
+ result.append(icon,body);
+}
+async function refreshStatus(){
+ try{const r=await fetch('/api/status');const d=await r.json();const pill=document.getElementById('modePill');pill.className='mode-pill '+(d.defense_enabled?'on':'off');
+ pill.querySelector('span').textContent=d.defense_enabled?'Defense monitor ON':'Defense monitor OFF';
+ document.getElementById('stateTitle').textContent=d.defense_enabled?'Defense ACTIVE':'Defense monitor OFF';
+ document.getElementById('stateDesc').textContent=d.defense_enabled?'Validation and blocking enabled.':'Simulation mode is active.';
+ document.getElementById('serviceStatus').textContent='Service connected';
+ }catch(e){document.getElementById('serviceStatus').textContent='Service unavailable'}
+}
+form.addEventListener('submit',async e=>{e.preventDefault();btn.disabled=true;btn.textContent='Checking…';
+ try{const r=await fetch('/api/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({host:input.value})});const d=await r.json();showResult(d,r.status);await refreshStatus()}
+ catch(e){result.className='result blocked';result.textContent='Cannot reach the local app. Is app.py running?'}
+ finally{btn.disabled=false;btn.innerHTML='Check connection <span>→</span>'}
+});
+refreshStatus();setInterval(refreshStatus,1500);
+</script>
+</body></html>
